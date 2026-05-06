@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>פוקר Pokerpais</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #1a1a1a; color: white; text-align: center; margin: 0; padding: 20px; }
+        #table { background: radial-gradient(circle, #27ae60 0%, #1e8449 100%); border: 8px solid #5d4037; border-radius: 100px; max-width: 500px; margin: 20px auto; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .player-box { background: rgba(0,0,0,0.6); padding: 10px; margin: 10px; border-radius: 15px; border: 1px solid #f1c40f; display: inline-block; min-width: 80px; }
+        input { padding: 12px; border-radius: 8px; border: none; width: 200px; margin-bottom: 10px; }
+        button { padding: 12px 25px; font-size: 1rem; background: #f1c40f; color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .pot-display { font-size: 1.5rem; color: #f1c40f; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div id="setup">
+        <h1>Pokerpais 🃏</h1>
+        <p>ברוכים הבאים למשחק הפוקר החברי שלכם</p>
+        <input type="text" id="username" placeholder="איך קוראים לך?">
+        <br>
+        <button onclick="join()">הצטרף למשחק</button>
+    </div>
+
+    <div id="game-ui" style="display:none;">
+        <div class="pot-display">💰 קופה: <span id="pot-amount">0</span></div>
+        <div id="table">
+            <div id="players-list"></div>
+        </div>
+        <br>
+        <button onclick="bet()">המר 50 צ'יפים</button>
+    </div>
+
+    <script>
+        const socket = io();
+        
+        function join() {
+            const user = document.getElementById('username').value;
+            if(user) {
+                socket.emit('joinGame', user);
+                document.getElementById('setup').style.display = 'none';
+                document.getElementById('game-ui').style.display = 'block';
+            }
+        }
+
+        function bet() {
+            socket.emit('placeBet', 50);
+        }
+
+        socket.on('updatePlayers', (players) => {
+            const list = document.getElementById('players-list');
+            list.innerHTML = players.map(p => `
+                <div class="player-box">
+                    <strong>${p.username}</strong><br>
+                    🪙 ${p.chips}
+                </div>
+            `).join('');
+        });
+
+        socket.on('updateGameState', (state) => {
+            document.getElementById('pot-amount').innerText = state.pot;
+        });
+    </script>
+</body>
+</html>
