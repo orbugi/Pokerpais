@@ -2,69 +2,88 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { background: #000; color: white; font-family: sans-serif; margin: 0; }
-        #admin-panel { display: none; background: #222; padding: 10px; border-bottom: 2px solid #b8860b; justify-content: center; gap: 10px; }
-        .table { width: 90%; height: 60vh; background: #1a5d1a; border: 10px solid #3d2b1f; border-radius: 500px; margin: 20px auto; position: relative; box-shadow: inset 0 0 50px #000; }
-        .card-area { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 10px; }
-        .card { width: 50px; height: 75px; background: white; color: black; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; }
-        input { padding: 10px; border-radius: 5px; }
-        button { padding: 10px 20px; cursor: pointer; font-weight: bold; }
+        body { background: #070707; color: white; font-family: sans-serif; margin: 0; overflow: hidden; }
+        #admin-bar { display: none; background: #222; padding: 10px; border-bottom: 2px solid #b8860b; justify-content: center; gap: 10px; }
+        
+        .poker-arena { height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #1a4a1a, #000); }
+        .table { width: 800px; height: 380px; background: #1a5d1a; border: 12px solid #3d2b1f; border-radius: 200px; position: relative; box-shadow: inset 0 0 80px #000; }
+        
+        .pot-area { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); text-align: center; }
+        .pot-chips { background: #f1c40f; color: black; padding: 5px 15px; border-radius: 20px; font-weight: bold; border: 2px dashed #000; }
+        
+        .community-cards { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 8px; }
+        .card { width: 55px; height: 80px; background: white; border-radius: 6px; color: black; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; animation: throw 0.5s ease-out; }
+        @keyframes throw { from { transform: translateY(-200px) rotate(20deg); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .player { position: absolute; width: 100px; text-align: center; }
+        .player-box { background: rgba(0,0,0,0.8); border: 2px solid #b8860b; border-radius: 8px; padding: 5px; }
+        .chip-bet { width: 30px; height: 30px; background: #e74c3c; border-radius: 50%; border: 2px solid white; display: flex; align-items: center; justify-content: center; font-size: 10px; margin: 0 auto 5px auto; }
     </style>
 </head>
 <body>
 
-<div id="admin-panel">
-    <input type="number" id="m-set" placeholder="מקסימום">
+<div id="admin-bar">
+    <input type="number" id="m-set" placeholder="Max">
     <input type="number" id="s-set" placeholder="SB">
-    <button onclick="lockRules()" style="background:#b8860b;">נעל חוקים</button>
-    <button onclick="deal()" style="background:#27ae60; color:white;">חלק יד (פלופ)</button>
+    <button onclick="updateRules()">קבע חוקים</button>
+    <button onclick="dealFlop()" style="background:green; color:white;">חלק פלופ</button>
 </div>
 
-<div id="login" style="text-align:center; padding-top:50px;">
-    <h2 id="msg">מחכה לאדמין...</h2>
-    <input type="text" id="p-name" placeholder="שם שחקן"><br><br>
-    <input type="number" id="p-buyin" placeholder="סכום כניסה"><br><br>
-    <button onclick="enter()">היכנס למשחק</button>
+<div id="login" style="position:fixed; inset:0; background:black; z-index:100; display:flex; align-items:center; justify-content:center;">
+    <div style="background:#222; padding:30px; border-radius:15px; border:1px solid #b8860b; text-align:center;">
+        <h2 id="rules-info">מחכה לאדמין...</h2>
+        <input type="text" id="nick" placeholder="שם שחקן"><br><br>
+        <input type="number" id="money" placeholder="סכום כניסה"><br><br>
+        <button onclick="join()">היכנס</button>
+    </div>
 </div>
 
-<div id="game" style="display:none;">
+<div class="poker-arena">
     <div class="table">
-        <div class="card-area" id="cards"></div>
+        <div class="pot-area">
+            <div style="font-size:12px;">POT</div>
+            <div class="pot-chips" id="pot-val">0</div>
+        </div>
+        <div class="community-cards" id="comm-cards"></div>
+        <div id="players-list"></div>
     </div>
 </div>
 
 <script>
     const socket = io();
     const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
-    if (isAdmin) document.getElementById('admin-panel').style.display = 'flex';
+    if (isAdmin) document.getElementById('admin-bar').style.display = 'flex';
 
-    function lockRules() {
-        socket.emit('set_rules', { 
-            max: document.getElementById('m-set').value, 
-            sb: document.getElementById('s-set').value 
-        });
+    function updateRules() {
+        socket.emit('set_rules', { max: document.getElementById('m-set').value, sb: document.getElementById('s-set').value });
     }
 
-    function deal() { socket.emit('deal_cards'); }
+    function dealFlop() { socket.emit('deal_flop'); }
 
-    socket.on('rules_updated', (data) => {
-        document.getElementById('msg').innerText = `חוקים: מקסימום ${data.max} | SB: ${data.sb}`;
-        window.maxB = data.max;
-    });
-
-    socket.on('cards_dealt', (data) => {
-        const area = document.getElementById('cards');
-        area.innerHTML = data.flop.map(c => `<div class="card">${c}</div>`).join('');
-    });
-
-    function enter() {
-        if (document.getElementById('p-buyin').value > window.maxB) return alert("חורג!");
+    function join() {
+        socket.emit('join_game', { name: document.getElementById('nick').value, buyin: document.getElementById('money').value });
         document.getElementById('login').style.display = 'none';
-        document.getElementById('game').style.display = 'block';
     }
+
+    socket.on('sync_table', (state) => {
+        document.getElementById('rules-info').innerText = `מקסימום: ${state.maxBuyin} | SB: ${state.sb}`;
+        document.getElementById('pot-val').innerText = state.pot;
+        
+        // הצגת קלפים
+        const cardsDiv = document.getElementById('comm-cards');
+        cardsDiv.innerHTML = state.communityCards.map(c => `<div class="card">${c}</div>`).join('');
+
+        // הצגת שחקנים (לדוגמה מיקום אחד)
+        const playersDiv = document.getElementById('players-list');
+        playersDiv.innerHTML = state.players.map((p, i) => `
+            <div class="player" style="bottom:10px; left:50%; transform:translateX(-50%);">
+                <div class="chip-bet">${p.bet}</div>
+                <div class="player-box"><div>${p.name}</div><div style="color:#2ecc71;">$${p.stack}</div></div>
+            </div>
+        `).join('');
+    });
 </script>
 </body>
 </html>
