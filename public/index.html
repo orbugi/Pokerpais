@@ -3,86 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Poker Professional</title>
+    <title>Poker Pro Sync</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { background: #0e0e0e; color: white; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        
-        /* מסך כניסה מקצועי */
-        #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
-        .login-card { background: #1c1c1c; padding: 30px; border-radius: 15px; border: 1px solid #333; width: 300px; text-align: center; }
-        .info-badge { background: #b8860b; color: black; padding: 5px 10px; border-radius: 5px; font-weight: bold; margin-bottom: 20px; font-size: 14px; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
+        body { background: #000; color: white; font-family: sans-serif; margin: 0; }
+        #admin-bar { display: none; background: #222; padding: 15px; border-bottom: 2px solid #b8860b; gap: 10px; justify-content: center; }
+        .login-card { background: #111; padding: 30px; border-radius: 15px; text-align: center; width: 300px; margin: 100px auto; border: 1px solid #333; }
+        .info-box { background: #b8860b; color: #000; padding: 5px; border-radius: 5px; font-weight: bold; margin-bottom: 15px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; background: #222; color: #fff; border: 1px solid #444; }
         button { width: 100%; padding: 15px; background: #8b6508; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        
-        /* השולחן */
-        #game-screen { display: none; flex: 1; position: relative; }
-        .poker-table { width: 90%; height: 60%; background: #1a5d1a; border: 10px solid #3d2b1f; border-radius: 500px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: inset 0 0 50px #000; }
-        
-        /* שחקן: כסף בראש וצ'יפ בשולחן */
-        .player { position: absolute; text-align: center; width: 100px; }
-        .player-head { background: #222; border: 2px solid #555; border-radius: 10px; padding: 5px; position: relative; }
-        .bank { color: #2ecc71; font-weight: bold; }
-        .chip { width: 35px; height: 35px; background: radial-gradient(circle, #f1c40f, #d4ac0d); border: 2px dashed #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold; margin: 5px auto; }
     </style>
 </head>
 <body>
 
+    <div id="admin-bar">
+        <input type="number" id="max-set" placeholder="מקסימום כניסה" style="width:100px;">
+        <input type="number" id="sb-set" placeholder="SB" style="width:80px;">
+        <button onclick="saveSettings()" style="width:auto; padding:10px;">נעל חוקים לשחקנים</button>
+    </div>
+
     <div id="login-screen">
         <div class="login-card">
             <h2>כניסה למשחק</h2>
-            <div id="rules-display" class="info-badge">טוען חוקי שולחן...</div>
-            
-            <input type="text" id="nameInput" placeholder="שם שחקן">
-            <input type="number" id="buyinInput" placeholder="סכום כניסה">
-            <button onclick="joinGame()">היכנס</button>
-            <p id="error-msg" style="color: #ff4d4d; font-size: 13px; margin-top: 10px; display: none;"></p>
-        </div>
-    </div>
-
-    <div id="game-screen">
-        <div id="admin-bar" style="background: #222; padding: 10px; display: flex; gap: 10px; justify-content: center; border-bottom: 2px solid #b8860b;">
-            <input type="number" id="admin-max" placeholder="מקסימום" style="width: 80px; margin: 0;">
-            <input type="number" id="admin-sb" placeholder="SB" style="width: 60px; margin: 0;">
-            <button onclick="updateRules()" style="width: auto; padding: 5px 15px; background: #b8860b;">עדכן חוקים</button>
-            <button onclick="dealCards()" style="width: auto; padding: 5px 15px; background: #27ae60;">חלק יד</button>
-        </div>
-        <div class="poker-table">
-            <div id="table-players"></div>
+            <div id="rules-view" class="info-box">מחכה לחוקי אדמין...</div>
+            <input type="text" id="p-name" placeholder="שם שחקן">
+            <input type="number" id="p-buyin" placeholder="סכום כניסה">
+            <button onclick="join()">היכנס לשולחן</button>
+            <p id="err" style="color:red; display:none;"></p>
         </div>
     </div>
 
     <script>
         const socket = io();
-        let currentMax = 500; // ברירת מחדל עד שאתה משנה
-
-        // קבלת עדכון על חוקים מהשרת
-        socket.on('table_settings', (data) => {
-            currentMax = data.max;
-            document.getElementById('rules-display').innerText = `מקסימום: ${data.max} | SB: ${data.sb}`;
-        });
-
-        function joinGame() {
-            const name = document.getElementById('nameInput').value;
-            const buyin = parseInt(document.getElementById('buyinInput').value);
-            const error = document.getElementById('error-msg');
-
-            if (buyin > currentMax) {
-                error.innerText = `אי אפשר להיכנס עם יותר מ-${currentMax}!`;
-                error.style.display = 'block';
-                return;
-            }
-
-            // אם הכל תקין - עוברים לשולחן
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('game-screen').style.display = 'flex';
-            // כאן תבוא הפקודה לשרת לרשום את השחקן
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // בדיקה: האם זה קישור אדמין?
+        if (urlParams.get('admin') === 'true') {
+            document.getElementById('admin-bar').style.display = 'flex';
         }
 
-        function updateRules() {
-            const max = document.getElementById('admin-max').value;
-            const sb = document.getElementById('admin-sb').value;
+        function saveSettings() {
+            const max = document.getElementById('max-set').value;
+            const sb = document.getElementById('sb-set').value;
             socket.emit('set_rules', { max, sb });
+            alert("החוקים עודכנו! עכשיו השחקנים יראו את המגבלה.");
+        }
+
+        socket.on('rules_updated', (data) => {
+            document.getElementById('rules-view').innerText = `מקסימום: ${data.max} | SB: ${data.sb}`;
+            window.currentMax = data.max;
+        });
+
+        function join() {
+            const buyin = document.getElementById('p-buyin').value;
+            if (buyin > window.currentMax) {
+                document.getElementById('err').innerText = "חריגה מהמקסימום!";
+                document.getElementById('err').style.display = 'block';
+                return;
+            }
+            // מעבר לשולחן...
         }
     </script>
 </body>
