@@ -5,48 +5,50 @@ const io = require('socket.io')(http);
 
 app.use(express.static('public'));
 
-let tableState = {
+let gameData = {
     maxBuyin: 500,
     sb: 10,
     pot: 0,
     players: [],
-    phase: 'waiting', // waiting, flop, turn, river
-    communityCards: []
+    communityCards: [],
+    phase: 'waiting'
 };
 
 io.on('connection', (socket) => {
-    socket.emit('sync_table', tableState);
+    // שליחת מצב שולחן עדכני ברגע החיבור
+    socket.emit('update_table', gameData);
 
-    socket.on('set_rules', (data) => {
-        tableState.maxBuyin = parseInt(data.max);
-        tableState.sb = parseInt(data.sb);
-        io.emit('sync_table', tableState);
+    socket.on('admin_config', (data) => {
+        gameData.maxBuyin = parseInt(data.max);
+        gameData.sb = parseInt(data.sb);
+        io.emit('update_table', gameData); // עדכון לכולם בזמן אמת
     });
 
-    socket.on('join_game', (player) => {
-        if (tableState.players.length < 6) {
-            const newPlayer = {
+    socket.on('player_join', (data) => {
+        if (gameData.players.length < 6) {
+            const player = {
                 id: socket.id,
-                name: player.name,
-                stack: parseInt(player.buyin) - tableState.sb,
-                bet: tableState.sb
+                name: data.name,
+                stack: parseInt(data.buyin) - gameData.sb,
+                bet: gameData.sb
             };
-            tableState.players.push(newPlayer);
-            tableState.pot += tableState.sb;
-            io.emit('sync_table', tableState);
+            gameData.players.push(player);
+            gameData.pot += gameData.sb;
+            io.emit('update_table', gameData);
         }
     });
 
-    socket.on('deal_flop', () => {
-        tableState.communityCards = ['Ah', 'Kd', 'Qc']; // פלופ לדוגמה
-        tableState.phase = 'flop';
-        io.emit('sync_table', tableState);
+    socket.on('deal_cards', (phase) => {
+        const deck = ['A♠', 'K♦', 'Q♣', 'J♥', '10♠']; // לוגיקה פשוטה לחלוקה
+        if (phase === 'flop') gameData.communityCards = deck.slice(0, 3);
+        gameData.phase = phase;
+        io.emit('update_table', gameData);
     });
 
     socket.on('disconnect', () => {
-        tableState.players = tableState.players.filter(p => p.id !== socket.id);
-        io.emit('sync_table', tableState);
+        gameData.players = gameData.players.filter(p => p.id !== socket.id);
+        io.emit('update_table', gameData);
     });
 });
 
-http.listen(process.env.PORT || 3000, () => console.log('Poker Server Running'));
+http.listen(process.env.PORT || 3000, () => console.log('Server Active'));
