@@ -5,36 +5,48 @@ const io = require('socket.io')(http);
 
 app.use(express.static('public'));
 
-// משתנים לשמירת חוקי המשחק
-let currentMax = 500;
-let currentSB = 10;
-let players = [];
+let tableState = {
+    maxBuyin: 500,
+    sb: 10,
+    pot: 0,
+    players: [],
+    phase: 'waiting', // waiting, flop, turn, river
+    communityCards: []
+};
 
 io.on('connection', (socket) => {
-    // 1. ברגע שמישהו מתחבר, המנוע שולח לו את החוקים הנוכחיים
-    socket.emit('rules_updated', { max: currentMax, sb: currentSB });
+    socket.emit('sync_table', tableState);
 
-    // 2. כשהאדמין לוחץ על "נעל חוקים", המנוע מעדכן את כולם
     socket.on('set_rules', (data) => {
-        currentMax = data.max;
-        currentSB = data.sb;
-        io.emit('rules_updated', data);
+        tableState.maxBuyin = parseInt(data.max);
+        tableState.sb = parseInt(data.sb);
+        io.emit('sync_table', tableState);
     });
 
-    // 3. כשהאדמין לוחץ על "חלק יד", המנוע שולח פקודה לפתוח קלפים
-    socket.on('deal_cards', () => {
-        io.emit('cards_dealt', { 
-            flop: ['Ah', 'Kd', 'Qc'], // דוגמה לקלפים
-            pot: 0 
-        });
+    socket.on('join_game', (player) => {
+        if (tableState.players.length < 6) {
+            const newPlayer = {
+                id: socket.id,
+                name: player.name,
+                stack: parseInt(player.buyin) - tableState.sb,
+                bet: tableState.sb
+            };
+            tableState.players.push(newPlayer);
+            tableState.pot += tableState.sb;
+            io.emit('sync_table', tableState);
+        }
+    });
+
+    socket.on('deal_flop', () => {
+        tableState.communityCards = ['Ah', 'Kd', 'Qc']; // פלופ לדוגמה
+        tableState.phase = 'flop';
+        io.emit('sync_table', tableState);
     });
 
     socket.on('disconnect', () => {
-        console.log('שחקן התנתק');
+        tableState.players = tableState.players.filter(p => p.id !== socket.id);
+        io.emit('sync_table', tableState);
     });
 });
 
-const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
-    console.log('השרת רץ על פורט ' + PORT);
-});
+http.listen(process.env.PORT || 3000, () => console.log('Poker Server Running'));
