@@ -1,23 +1,12 @@
-<style>
-    /* שחקן מקצועי: בנק בראש וצ'יפ בשולחן */
-    .player-node { position: absolute; width: 100px; text-align: center; }
-    .head-info { background: #111; border: 1px solid #444; border-radius: 8px; padding: 5px; }
-    .chip-visual { 
-        width: 30px; height: 30px; background: radial-gradient(circle, #f1c40f, #b8860b);
-        border: 2px dashed #fff; border-radius: 50%; margin: 5px auto;
-        display: flex; align-items: center; justify-content: center; color: #000; font-weight: bold;
-    }
-</style>
-
-<div id="admin-setup" style="display:none; background:#222; padding:20px; border-bottom:3px solid #f1c40f;">
-    <h3>הגדרות שולחן (אדמין בלבד)</h3>
-    <input type="number" id="set-max" placeholder="מקסימום כניסה">
-    <input type="number" id="set-sb" placeholder="Small Blind">
-    <button onclick="lockRules()">פתח שולחן לשחקנים</button>
-</div>
-
-<div id="player-login">
-    <input type="text" id="p-name" placeholder="שם">
-    <input type="number" id="p-buyin" placeholder="סכום כניסה">
-    <button onclick="requestJoin()">היכנס לשולחן</button>
+<div id="admin-setup" style="display: block; background: #1a1a1a; padding: 20px; text-align: center;">
+    <h2 style="color: #f1c40f;">הגדרות שולחן מקצועי</h2>
+    <div style="margin-bottom: 15px;">
+        <label>מקסימום כניסה לשולחן:</label><br>
+        <input type="number" id="max-limit" placeholder="למשל: 500" style="padding: 10px; width: 200px;">
+    </div>
+    <div style="margin-bottom: 20px;">
+        <label>Small Blind (שמאל):</label><br>
+        <input type="number" id="sb-value" placeholder="למשל: 5" style="padding: 10px; width: 200px;">
+    </div>
+    <button onclick="lockAndOpen()" style="padding: 15px 40px; background: #27ae60; color: white; border: none; font-weight: bold;">פתח שולחן לשחקנים</button>
 </div>
