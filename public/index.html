@@ -4,75 +4,89 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; margin: 0; overflow: hidden; height: 100vh; }
-        #setup-screen { position: fixed; inset: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
-        .input-group { margin-bottom: 15px; }
-        input { padding: 12px; border-radius: 8px; border: none; width: 200px; }
+        body { background: #000; color: #fff; font-family: system-ui; margin: 0; overflow: hidden; height: 100vh; }
+        #login-screen { position: fixed; inset: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
         
-        #table-container { position: relative; height: 60vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #1a5d1a 0%, #0a3d0a 100%); }
-        .poker-table { width: 90%; height: 80%; border: 15px solid #3d2b1f; border-radius: 200px; position: relative; box-shadow: inset 0 0 50px #000; }
+        /* עיצוב שולחן פוקר מקצועי */
+        #table-container { height: 60vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .poker-felt { width: 100%; height: 100%; background: #1a5d1a; border: 15px solid #3d2b1f; border-radius: 1000px; position: relative; box-shadow: inset 0 0 100px #000; }
         
-        .player-node { position: absolute; width: 80px; text-align: center; }
-        .avatar { background: #222; border-radius: 50%; width: 60px; height: 60px; margin: 0 auto; border: 2px solid #444; display: flex; align-items: center; justify-content: center; position: relative; }
-        .active-turn { border-color: #f1c40f; box-shadow: 0 0 15px #f1c40f; }
-        .role-badge { position: absolute; bottom: -5px; right: -5px; background: #f1c40f; color: #000; font-weight: bold; padding: 2px 6px; border-radius: 50%; font-size: 12px; }
-        .chip-on-table { position: absolute; color: #f1c40f; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px #000; }
+        /* שחקן: שם וסכום מעל הראש */
+        .player-wrap { position: absolute; width: 90px; text-align: center; transform: translate(-50%, -50%); }
+        .player-info { background: rgba(0,0,0,0.9); border: 1px solid #444; border-radius: 10px; padding: 5px; }
+        .active-player { border: 2px solid #f1c40f; box-shadow: 0 0 15px #f1c40f; }
+        
+        /* צ'יפים על השולחן */
+        .bet-chips { position: absolute; color: #f1c40f; font-weight: bold; font-size: 14px; white-space: nowrap; }
+        
+        #admin-panel { background: #222; padding: 10px; display: none; gap: 10px; border-bottom: 2px solid #f1c40f; font-size: 12px; }
     </style>
 </head>
 <body>
-    <div id="setup-screen">
-        <h2>כניסה לשולחן פוקר</h2>
-        <div class="input-group"><input type="text" id="p-name" placeholder="שם שחקן"></div>
-        <div class="input-group"><input type="number" id="p-buyin" placeholder="סכום כניסה (מינימום 100)" value="200"></div>
-        <button onclick="enterGame()" style="padding:15px 40px; background:#f1c40f; border:none; border-radius:8px; font-weight:bold;">היכנס לשולחן</button>
+
+    <div id="login-screen">
+        <h2 style="margin-bottom:20px;">כניסה למשחק</h2>
+        <input type="text" id="uname" placeholder="שם שחקן" style="padding:15px; margin-bottom:10px; width:250px;">
+        <input type="number" id="ubuyin" placeholder="סכום כניסה" style="padding:15px; margin-bottom:20px; width:250px;">
+        <button onclick="join()" style="padding:15px 60px; background:#a67c00; border:none; border-radius:8px; color:#fff; font-weight:bold;">היכנס</button>
     </div>
 
-    <div id="game-ui" style="display:none;">
-        <div id="table-container">
-            <div class="poker-table">
-                <div id="community" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); display:flex; gap:10px;"></div>
-                <div id="players-ring"></div>
-            </div>
+    <div id="admin-panel">
+        מקסימום כניסה: <input type="number" id="max-in" value="500" style="width:50px;">
+        Small Blind: <input type="number" id="sb-in" value="5" style="width:40px;">
+        <button onclick="updateConfig()" style="background:#f1c40f; border:none; padding:5px 10px; border-radius:4px;">עדכן הגדרות</button>
+        <button onclick="socket.emit('startGame')" style="background:#27ae60; color:#fff; border:none; padding:5px 10px; border-radius:4px; margin-right:20px;">חלק יד</button>
+    </div>
+
+    <div id="table-container">
+        <div class="poker-felt">
+            <div id="pot" style="position:absolute; top:30%; left:50%; transform:translateX(-50%); color:#f1c40f; font-weight:bold; font-size:20px;">קופה: 0</div>
+            <div id="community" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); display:flex; gap:8px;"></div>
+            <div id="players-ring"></div>
         </div>
-        <div style="text-align:center; font-size:24px; color:#f1c40f;">קופה: <span id="pot-total">0</span></div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        function enterGame() {
-            const name = document.getElementById('p-name').value;
-            const buyin = document.getElementById('p-buyin').value;
-            if(name && buyin >= 100) {
-                socket.emit('joinGame', {name, buyin});
-                document.getElementById('setup-screen').style.display = 'none';
-                document.getElementById('game-ui').style.display = 'block';
-            } else { alert("מינימום כניסה: 100"); }
+        function join() {
+            const name = document.getElementById('uname').value;
+            const buyin = document.getElementById('ubuyin').value;
+            if(name && buyin) socket.emit('joinGame', {name, buyin});
         }
 
+        socket.on('updatePlayers', (ps) => {
+            document.getElementById('login-screen').style.display = 'none';
+            const me = ps.find(p => p.id === socket.id);
+            if(me?.isAdmin) document.getElementById('admin-panel').style.display = 'flex';
+            render(ps);
+        });
+
         socket.on('gameUpdate', (data) => {
-            document.getElementById('pot-total').innerText = data.gameState.pot;
+            document.getElementById('pot').innerText = "קופה: " + data.gameState.pot;
+            render(data.players, data.gameState);
+        });
+
+        function render(ps, state = {}) {
             const ring = document.getElementById('players-ring');
             ring.innerHTML = '';
-            
-            data.players.forEach((p, i) => {
-                const angle = (i / data.players.length) * 2 * Math.PI;
-                const x = Math.cos(angle) * 40 + 50; const y = Math.sin(angle) * 40 + 50;
-                const cx = Math.cos(angle) * 25 + 50; const cy = Math.sin(angle) * 25 + 50;
+            ps.forEach((p, i) => {
+                const angle = (i / ps.length) * 2 * Math.PI;
+                const x = Math.cos(angle) * 42 + 50; const y = Math.sin(angle) * 42 + 50;
+                const cx = Math.cos(angle) * 28 + 50; const cy = Math.sin(angle) * 28 + 50;
 
                 ring.innerHTML += `
-                    <div class="player-node" style="left:${x}%; top:${y}%; transform:translate(-50%,-50%);">
-                        <div class="avatar ${i === data.gameState.turnIndex ? 'active-turn' : ''}">
-                            <span style="font-size:10px;">$${p.chips}</span>
-                            ${p.role ? `<div class="role-badge">${p.role}</div>` : ''}
+                    <div class="player-wrap" style="left:${x}%; top:${y}%;">
+                        <div class="player-info ${i === state.turnIndex ? 'active-player' : ''}">
+                            <div style="font-size:11px; color:#aaa;">${p.username}</div>
+                            <div style="font-size:14px; font-weight:bold;">$${p.chips}</div>
                         </div>
-                        <div style="font-size:12px; margin-top:5px;">${p.username}</div>
                     </div>
-                    <div class="chip-on-table" style="left:${cx}%; top:${cy}%; transform:translate(-50%,-50%);">
-                        ${p.betThisRound > 0 ? '🪙 ' + p.betThisRound : ''}
+                    <div class="bet-chips" style="left:${cx}%; top:${cy}%; transform:translate(-50%, -50%); display:${p.betThisRound > 0 ? 'block' : 'none'}">
+                        🪙 ${p.betThisRound}
                     </div>`;
             });
-        });
+        }
     </script>
 </body>
 </html>
