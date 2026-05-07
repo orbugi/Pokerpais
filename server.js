@@ -10,10 +10,9 @@ let game = {
     deck: [],
     community: [],
     pot: 0,
-    turnIndex: 0,
-    phase: 'preflop', // preflop, flop, turn, river
     maxBuyin: 500,
-    sb: 10
+    sb: 10,
+    phase: 'waiting'
 };
 
 function createDeck() {
@@ -28,49 +27,48 @@ io.on('connection', (socket) => {
     socket.emit('sync', game);
 
     socket.on('admin_init', (data) => {
-        game.maxBuyin = data.max;
-        game.sb = data.sb;
+        game.maxBuyin = parseInt(data.max);
+        game.sb = parseInt(data.sb);
         game.deck = createDeck();
         game.community = game.deck.splice(0, 5);
+        game.phase = 'preflop';
+        game.pot = 0;
+        game.players = []; // איפוס שחקנים לתחילת משחק חדש
         io.emit('sync', game);
     });
 
     socket.on('join', (data) => {
-        if (game.players.length < 6) {
-            const pCards = [game.deck.pop(), game.deck.pop()];
-            game.players.push({
-                id: socket.id,
-                name: data.name,
-                stack: data.buyin - game.sb,
-                bet: game.sb,
-                cards: pCards
-            });
-            game.pot += game.sb;
-            io.emit('sync', game);
-        }
+        const pCards = [game.deck.pop(), game.deck.pop()];
+        const newPlayer = {
+            id: socket.id,
+            name: data.name,
+            stack: parseInt(data.buyin) - game.sb,
+            bet: game.sb,
+            cards: pCards // הקלפים נשמרים כאן
+        };
+        game.players.push(newPlayer);
+        game.pot += game.sb;
+        io.emit('sync', game);
     });
 
     socket.on('action', (data) => {
-        // כאן נכנסת הלוגיקה של הימור/צ'ק/פולד
         let p = game.players.find(pl => pl.id === socket.id);
+        if (!p) return;
         if (data.type === 'call') {
-            p.stack -= data.amount;
-            p.bet += data.amount;
-            game.pot += data.amount;
+            const amount = game.sb; // הימור בסיסי לצורך הבדיקה
+            p.stack -= amount;
+            p.bet += amount;
+            game.pot += amount;
+        } else if (data.type === 'fold') {
+            p.cards = [];
         }
-        // מעבר שלב אוטומטי
-        game.turnIndex = (game.turnIndex + 1) % game.players.length;
         io.emit('sync', game);
     });
 
     socket.on('next_phase', () => {
         const phases = ['preflop', 'flop', 'turn', 'river'];
-        game.phase = phases[phases.indexOf(game.phase) + 1] || 'preflop';
-        io.emit('sync', game);
-    });
-
-    socket.on('disconnect', () => {
-        game.players = game.players.filter(p => p.id !== socket.id);
+        let curr = phases.indexOf(game.phase);
+        game.phase = phases[curr + 1] || 'preflop';
         io.emit('sync', game);
     });
 });
