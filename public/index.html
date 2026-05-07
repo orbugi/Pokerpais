@@ -7,31 +7,33 @@
     <style>
         body { background: #000; color: white; font-family: sans-serif; margin: 0; }
         #admin-panel { display: none; background: #222; padding: 10px; border-bottom: 2px solid #b8860b; justify-content: center; gap: 10px; }
-        .table-area { height: 70vh; position: relative; display: flex; justify-content: center; align-items: center; }
-        .felt { width: 90%; height: 70%; background: #1a5d1a; border: 10px solid #3d2b1f; border-radius: 500px; position: relative; box-shadow: inset 0 0 50px #000; }
-        .player { position: absolute; text-align: center; width: 100px; }
-        .head { background: #111; border: 2px solid #555; border-radius: 10px; padding: 5px; } /* כסף בראש */
-        .chip { width: 30px; height: 30px; background: radial-gradient(circle, #f1c40f, #d4ac0d); border: 2px dashed #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold; margin: 5px auto; } /* צ'יפ בשולחן */
-        input { padding: 10px; border-radius: 5px; border: none; }
+        .table { width: 90%; height: 60vh; background: #1a5d1a; border: 10px solid #3d2b1f; border-radius: 500px; margin: 20px auto; position: relative; box-shadow: inset 0 0 50px #000; }
+        .card-area { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 10px; }
+        .card { width: 50px; height: 75px; background: white; color: black; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; }
+        input { padding: 10px; border-radius: 5px; }
+        button { padding: 10px 20px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div id="admin-panel">
-    <input type="number" id="m-val" placeholder="מקסימום">
-    <input type="number" id="s-val" placeholder="SB">
-    <button onclick="update()" style="background:#b8860b; color:black; font-weight:bold;">נעל חוקים</button>
+    <input type="number" id="m-set" placeholder="מקסימום">
+    <input type="number" id="s-set" placeholder="SB">
+    <button onclick="lockRules()" style="background:#b8860b;">נעל חוקים</button>
+    <button onclick="deal()" style="background:#27ae60; color:white;">חלק יד (פלופ)</button>
 </div>
 
-<div id="login-view" style="text-align:center; padding-top:100px;">
-    <h2 id="rules-msg">מחכה לחוקי שולחן...</h2>
+<div id="login" style="text-align:center; padding-top:50px;">
+    <h2 id="msg">מחכה לאדמין...</h2>
     <input type="text" id="p-name" placeholder="שם שחקן"><br><br>
     <input type="number" id="p-buyin" placeholder="סכום כניסה"><br><br>
-    <button onclick="join()" style="background:#8b6508; color:white; padding:15px 40px; border:none; border-radius:10px;">היכנס</button>
+    <button onclick="enter()">היכנס למשחק</button>
 </div>
 
-<div id="game-view" style="display:none;">
-    <div class="table-area"><div class="felt" id="table-players"></div></div>
+<div id="game" style="display:none;">
+    <div class="table">
+        <div class="card-area" id="cards"></div>
+    </div>
 </div>
 
 <script>
@@ -39,21 +41,29 @@
     const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
     if (isAdmin) document.getElementById('admin-panel').style.display = 'flex';
 
-    function update() {
-        socket.emit('set_rules', { max: document.getElementById('m-val').value, sb: document.getElementById('s-val').value });
+    function lockRules() {
+        socket.emit('set_rules', { 
+            max: document.getElementById('m-set').value, 
+            sb: document.getElementById('s-set').value 
+        });
     }
 
+    function deal() { socket.emit('deal_cards'); }
+
     socket.on('rules_updated', (data) => {
-        document.getElementById('rules-msg').innerText = `חוקי שולחן: מקסימום ${data.max} | SB: ${data.sb}`;
-        window.maxBuyin = data.max;
+        document.getElementById('msg').innerText = `חוקים: מקסימום ${data.max} | SB: ${data.sb}`;
+        window.maxB = data.max;
     });
 
-    function join() {
-        const buyin = document.getElementById('p-buyin').value;
-        if (buyin > window.maxBuyin) return alert("חורג מהמקסימום!");
-        document.getElementById('login-view').style.display = 'none';
-        document.getElementById('game-view').style.display = 'block';
-        // כאן המערכת תציג את השחקן עם הכסף בראש והצ'יפ בשולחן
+    socket.on('cards_dealt', (data) => {
+        const area = document.getElementById('cards');
+        area.innerHTML = data.flop.map(c => `<div class="card">${c}</div>`).join('');
+    });
+
+    function enter() {
+        if (document.getElementById('p-buyin').value > window.maxB) return alert("חורג!");
+        document.getElementById('login').style.display = 'none';
+        document.getElementById('game').style.display = 'block';
     }
 </script>
 </body>
