@@ -1,14 +1,40 @@
+const express = require('express');
+const app = express();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
+
+app.use(express.static('public'));
+
+// משתנים לשמירת חוקי המשחק
+let currentMax = 500;
+let currentSB = 10;
+let players = [];
+
 io.on('connection', (socket) => {
-    // שליחת חוקי השולחן ברגע שמישהו מתחבר
-    socket.emit('rules_updated', { max: global.maxBuyin || 500, sb: global.sb || 5 });
+    // 1. ברגע שמישהו מתחבר, המנוע שולח לו את החוקים הנוכחיים
+    socket.emit('rules_updated', { max: currentMax, sb: currentSB });
 
+    // 2. כשהאדמין לוחץ על "נעל חוקים", המנוע מעדכן את כולם
     socket.on('set_rules', (data) => {
-        global.maxBuyin = data.max;
-        global.sb = data.sb;
-        io.emit('rules_updated', data); // זה מה שמעדכן את כל השחקנים בשידור חי
+        currentMax = data.max;
+        currentSB = data.sb;
+        io.emit('rules_updated', data);
     });
 
+    // 3. כשהאדמין לוחץ על "חלק יד", המנוע שולח פקודה לפתוח קלפים
     socket.on('deal_cards', () => {
-        io.emit('cards_dealt', { flop: ['As', 'Kd', 'Qh'] }); // כאן הקלפים נפתחים
+        io.emit('cards_dealt', { 
+            flop: ['Ah', 'Kd', 'Qc'], // דוגמה לקלפים
+            pot: 0 
+        });
     });
+
+    socket.on('disconnect', () => {
+        console.log('שחקן התנתק');
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+http.listen(PORT, () => {
+    console.log('השרת רץ על פורט ' + PORT);
 });
