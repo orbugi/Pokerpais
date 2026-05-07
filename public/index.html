@@ -3,40 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pokerpais Fixed</title>
+    <title>Pokerpais Pro</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { background: #0f0f0f; color: white; font-family: sans-serif; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        
-        /* אזור ניהול עליון */
         #admin-area { background: #222; padding: 5px; display: none; justify-content: center; gap: 5px; border-bottom: 1px solid #f1c40f; z-index: 10; }
-
         #table-zone { flex-grow: 1; position: relative; display: flex; align-items: center; justify-content: center; }
-        
-        #poker-table {
-            width: 90vw; height: 50vw; background: radial-gradient(circle, #1a5d1a 0%, #0a3d0a 100%);
-            border: 8px solid #3d2b1f; border-radius: 100px; position: relative; box-shadow: inset 0 0 30px #000;
-        }
-
+        #poker-table { width: 90vw; height: 55vw; background: radial-gradient(circle, #1a5d1a 0%, #0a3d0a 100%); border: 8px solid #3d2b1f; border-radius: 100px; position: relative; box-shadow: inset 0 0 30px #000; }
         .community-cards { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 5px; }
-        
-        .card {
-            width: 35px; height: 50px; background: white; color: black; border-radius: 4px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            font-weight: bold; border: 1px solid #000; font-size: 14px;
-        }
+        .card { width: 32px; height: 45px; background: white; color: black; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; border: 1px solid #000; font-size: 12px; }
         .red { color: #e74c3c; }
-
-        .player-slot { position: absolute; width: 60px; text-align: center; font-size: 10px; background: rgba(0,0,0,0.6); padding: 5px; border-radius: 5px; }
-
-        /* אזור תחתון לקלפים וכפתורים */
+        .player-slot { position: absolute; width: 70px; text-align: center; font-size: 11px; }
+        .player-info { background: rgba(0,0,0,0.8); padding: 5px; border-radius: 8px; border: 1px solid #444; }
+        .chip-stack { color: #f1c40f; font-weight: bold; font-size: 14px; margin-top: 5px; text-shadow: 1px 1px 2px #000; display: none; }
         #bottom-bar { background: #1a1a1a; padding: 10px; border-top: 2px solid #333; }
-        #my-hand { display: flex; justify-content: center; gap: 10px; margin-bottom: 10px; min-height: 55px; }
-        
+        #my-hand { display: flex; justify-content: center; gap: 10px; margin-bottom: 10px; min-height: 50px; }
         .action-btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-        
         button { padding: 12px 5px; border-radius: 8px; border: none; font-weight: bold; font-size: 14px; color: white; }
-        .btn-admin { background: #f1c40f; color: black; padding: 8px 15px; font-size: 12px; }
+        .btn-admin { background: #f1c40f; color: black; padding: 5px 10px; font-size: 11px; }
         .btn-bet { background: #2980b9; }
         .btn-fold { background: #c0392b; }
         .btn-check { background: #7f8c8d; }
@@ -46,7 +30,7 @@
     <div id="setup" style="padding: 50px; text-align: center;">
         <h1>Pokerpais 🃏</h1>
         <input type="text" id="nick" placeholder="שם שחקן" style="padding: 10px;"><br><br>
-        <button style="background:#f1c40f; color:black" onclick="join()">היכנס לשולחן</button>
+        <button style="background:#f1c40f; color:black" onclick="join()">היכנס</button>
     </div>
 
     <div id="game-ui" style="display:none; height: 100%;">
@@ -54,16 +38,13 @@
             <button class="btn-admin" onclick="socket.emit('startGame')">יד חדשה</button>
             <button class="btn-admin" onclick="socket.emit('nextPhase')">פתח קלף</button>
         </div>
-
-        <div style="text-align:center; color:#f1c40f; padding:5px;">💰 קופה: <span id="pot">0</span></div>
-
+        <div style="text-align:center; color:#f1c40f; padding:5px; font-weight:bold;">💰 קופה: <span id="pot">0</span></div>
         <div id="table-zone">
             <div id="poker-table">
                 <div class="community-cards" id="community"></div>
                 <div id="players-circle"></div>
             </div>
         </div>
-
         <div id="bottom-bar">
             <div id="my-hand"></div>
             <div class="action-btns">
@@ -76,6 +57,8 @@
 
     <script>
         const socket = io();
+        let lastBet = {};
+
         function join() {
             const n = document.getElementById('nick').value;
             if(n) {
@@ -111,36 +94,22 @@
             container.innerHTML = '';
             players.forEach((p, i) => {
                 const angle = (i / players.length) * 2 * Math.PI;
-                const x = Math.cos(angle) * 40 + 50;
-                const y = Math.sin(angle) * 40 + 50;
+                const x = Math.cos(angle) * 38 + 50;
+                const y = Math.sin(angle) * 38 + 50;
+                // חישוב מיקום הצ'יפים שיהיה קרוב יותר למרכז השולחן מהשחקן
+                const cx = Math.cos(angle) * 20 + 50;
+                const cy = Math.sin(angle) * 20 + 50;
+                
                 container.innerHTML += `
                     <div class="player-slot" style="left: ${x}%; top: ${y}%; transform: translate(-50%, -50%);">
-                        <div>${p.username}</div>
-                        <div style="color: #f1c40f;">$${p.chips}</div>
-                    </div>`;
-            });
-        }
-    </script>
-</body>
-</html>
-                document.getElementById('cards-container').innerHTML = me.cards.map(createCardHTML).join('');
-            }
-            renderPlayers(data.players);
-        });
-
-        function renderPlayers(players) {
-            const container = document.getElementById('players-circle');
-            container.innerHTML = '';
-            players.forEach((p, i) => {
-                const angle = (i / players.length) * 2 * Math.PI;
-                const x = Math.cos(angle) * 45 + 50;
-                const y = Math.sin(angle) * 45 + 50;
-                container.innerHTML += `
-                    <div class="player-slot" style="left: ${x}%; top: ${y}%; transform: translate(-50%, -50%);">
-                        <div style="font-size: 12px;">${p.username}</div>
-                        <div style="color: #f1c40f;">$${p.chips}</div>
+                        <div class="player-info">
+                            <div>${p.username}</div>
+                            <div style="color: #f1c40f;">$${p.chips}</div>
+                        </div>
                     </div>
-                `;
+                    <div id="chip-${p.id}" class="chip-stack" style="position:absolute; left: ${cx}%; top: ${cy}%; transform: translate(-50%, -50%); display: ${p.lastBet ? 'block' : 'none'}">
+                        🪙 ${p.lastBet || ''}
+                    </div>`;
             });
         }
     </script>
