@@ -4,43 +4,34 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server);
 
 app.use(express.static('public'));
 
 let players = [];
 let deck = [];
 let gameState = { 
-    pot: 0, 
-    communityCards: [], 
-    status: 'waiting', 
-    phase: 'preflop', 
-    currentBet: 0,
-    turnIndex: 0,
-    dealerIndex: 0,
-    minBlind: 5 // ניתן לשינוי
+    pot: 0, communityCards: [], phase: 'preflop', 
+    currentBet: 0, turnIndex: 0, dealerIndex: 0, sbAmount: 5 
 };
 
 function createDeck() {
     const suits = ['♠', '♥', '♦', '♣'];
     const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-    let newDeck = [];
-    for (let s of suits) for (let v of values) newDeck.push({v, s});
-    return newDeck.sort(() => Math.random() - 0.5);
+    let d = [];
+    for (let s of suits) for (let v of values) d.push({v, s});
+    return d.sort(() => Math.random() - 0.5);
 }
 
-function getNextActivePlayer(startIndex) {
-    let next = (startIndex + 1) % players.length;
-    let count = 0;
-    while (players[next].status !== 'active' && count < players.length) {
-        next = (next + 1) % players.length;
-        count++;
-    }
+function getNextPlayer(idx) {
+    let next = (idx + 1) % players.length;
+    while (players[next].status !== 'active') next = (next + 1) % players.length;
     return next;
 }
 
-function startNextPhase() {
-    players.forEach(p => { p.hasActed = false; p.betThisRound = 0; p.lastAction = ""; });
+function proceed() {
+    // איפוס הימורים לסיבוב הבא
+    players.forEach(p => { p.betThisRound = 0; p.hasActed = false; p.lastAction = ""; });
     gameState.currentBet = 0;
 
     if (gameState.phase === 'preflop') {
@@ -53,82 +44,66 @@ function startNextPhase() {
         gameState.communityCards.push(deck.pop());
         gameState.phase = 'river';
     } else {
-        gameState.status = 'showdown';
-        return io.emit('gameUpdate', { players, gameState });
+        // כאן יבוא חישוב המנצח (Showdown)
+        return;
     }
-
-    // מהפלופ והלאה: הראשון משמאל לדילר (Dealer+1) תמיד מתחיל
-    gameState.turnIndex = getNextActivePlayer(gameState.dealerIndex);
+    // מהפלופ והלאה - הראשון אחרי הדילר מדבר
+    gameState.turnIndex = getNextPlayer(gameState.dealerIndex);
     io.emit('gameUpdate', { players, gameState });
 }
 
 io.on('connection', (socket) => {
-    socket.on('joinGame', (username) => {
-        players.push({ 
-            id: socket.id, username, chips: 1000, cards: [], 
-            status: 'active', isAdmin: players.length === 0, 
-            betThisRound: 0, hasActed: false, lastAction: "" 
-        });
+    socket.on('joinGame', (name) => {
+        players.push({ id: socket.id, username: name, chips: 1000, cards: [], status: 'active', betThisRound: 0, hasActed: false, lastAction: "", isAdmin: players.length === 0 });
         io.emit('updatePlayers', players);
     });
 
-    socket.on('startGame', (customBlinds) => {
+    socket.on('startGame', (cfg) => {
         if (players.length < 2) return;
-        const sb = customBlinds?.sb || 5;
-        const bb = sb * 2;
-        
+        gameState.sbAmount = cfg.sb || 5;
+        let bb = gameState.sbAmount * 2;
         deck = createDeck();
-        gameState.status = 'playing';
         gameState.phase = 'preflop';
         gameState.communityCards = [];
-        gameState.pot = sb + bb;
         gameState.currentBet = bb;
+        
+        let sbIdx = getNextPlayer(gameState.dealerIndex);
+        let bbIdx = getNextPlayer(sbIdx);
 
-        const sbIndex = getNextActivePlayer(gameState.dealerIndex);
-        const bbIndex = getNextActivePlayer(sbIndex);
-
-        players.forEach((p, idx) => {
+        players.forEach((p, i) => {
             p.cards = [deck.pop(), deck.pop()];
             p.status = 'active';
             p.hasActed = false;
-            p.betThisRound = (idx === sbIndex) ? sb : (idx === bbIndex ? bb : 0);
-            p.chips -= p.betThisRound;
-            p.lastAction = (idx === sbIndex) ? "SB" : (idx === bbIndex ? "BB" : "");
+            if (i === sbIdx) { p.chips -= gameState.sbAmount; p.betThisRound = gameState.sbAmount; p.lastAction = "SB"; }
+            else if (i === bbIdx) { p.chips -= bb; p.betThisRound = bb; p.lastAction = "BB"; }
         });
 
-        // בפרה-פלופ: הראשון אחרי ה-BB מדבר (UTG)
-        gameState.turnIndex = getNextActivePlayer(bbIndex);
+        gameState.pot = gameState.sbAmount + bb;
+        gameState.turnIndex = getNextPlayer(bbIdx); // UTG מתחיל בפרה-פלופ
         io.emit('gameUpdate', { players, gameState });
     });
 
-    socket.on('action', (data) => {
-        const player = players[gameState.turnIndex];
-        if (player.id !== socket.id) return;
+    socket.on('action', (act) => {
+        let p = players[gameState.turnIndex];
+        if (p.id !== socket.id) return;
 
-        if (data.type === 'fold') {
-            player.status = 'folded';
-            player.lastAction = "Fold";
-        } else {
-            const callAmount = gameState.currentBet - player.betThisRound;
-            const totalBet = callAmount + (data.raise || 0);
-            player.chips -= totalBet;
-            player.betThisRound += totalBet;
-            gameState.pot += totalBet;
-            gameState.currentBet = Math.max(gameState.currentBet, player.betThisRound);
-            player.lastAction = data.raise > 0 ? "Raise" : (callAmount > 0 ? "Call" : "Check");
-            player.hasActed = true;
+        p.hasActed = true;
+        if (act.type === 'fold') { p.status = 'folded'; p.lastAction = "Fold"; }
+        else {
+            let call = gameState.currentBet - p.betThisRound;
+            let total = call + (act.raise || 0);
+            p.chips -= total; p.betThisRound += total; gameState.pot += total;
+            gameState.currentBet = Math.max(gameState.currentBet, p.betThisRound);
+            p.lastAction = act.raise > 0 ? "Raise" : (call > 0 ? "Call" : "Check");
         }
 
-        const activePlayers = players.filter(p => p.status === 'active');
-        const roundOver = activePlayers.every(p => p.hasActed && p.betThisRound === gameState.currentBet);
-
-        if (roundOver) {
-            setTimeout(startNextPhase, 1000);
+        let active = players.filter(ps => ps.status === 'active');
+        if (active.every(ps => ps.hasActed && ps.betThisRound === gameState.currentBet)) {
+            setTimeout(proceed, 1000);
         } else {
-            gameState.turnIndex = getNextActivePlayer(gameState.turnIndex);
+            gameState.turnIndex = getNextPlayer(gameState.turnIndex);
             io.emit('gameUpdate', { players, gameState });
         }
     });
 });
-
 server.listen(process.env.PORT || 3000);
