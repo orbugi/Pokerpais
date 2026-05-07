@@ -1,26 +1,14 @@
-const io = require('socket.io')(server);
-let tableConfig = { maxBuyin: null, sb: null, bb: null, started: false };
-let players = [];
-
 io.on('connection', (socket) => {
-    // הגדרת השולחן על ידי האדמין בלבד
-    socket.on('setup_table', (data) => {
-        tableConfig = { maxBuyin: data.max, sb: data.sb, bb: data.sb * 2, started: true };
-        io.emit('table_ready', tableConfig);
+    // שליחת חוקי השולחן ברגע שמישהו מתחבר
+    socket.emit('rules_updated', { max: global.maxBuyin || 500, sb: global.sb || 5 });
+
+    socket.on('set_rules', (data) => {
+        global.maxBuyin = data.max;
+        global.sb = data.sb;
+        io.emit('rules_updated', data); // זה מה שמעדכן את כל השחקנים בשידור חי
     });
 
-    socket.on('join_request', (user) => {
-        // אכיפה קשיחה: שחקן לא יכול להיכנס אם הוא חורג מהחוקים שלך
-        if (user.buyin > tableConfig.maxBuyin) {
-            socket.emit('error_msg', 'הסכום גבוה מהמקסימום שנקבע לשולחן זה');
-            return;
-        }
-        players.push({ 
-            id: socket.id, name: user.name, 
-            bank: user.buyin, // הכסף בראש
-            bet: 0, // צ'יפים על השולחן
-            isAdmin: players.length === 0 
-        });
-        io.emit('player_list', players);
+    socket.on('deal_cards', () => {
+        io.emit('cards_dealt', { flop: ['As', 'Kd', 'Qh'] }); // כאן הקלפים נפתחים
     });
 });
