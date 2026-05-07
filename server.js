@@ -5,50 +5,74 @@ const io = require('socket.io')(http);
 
 app.use(express.static('public'));
 
-let gameData = {
-    maxBuyin: 500,
-    sb: 10,
-    pot: 0,
+let game = {
     players: [],
-    communityCards: [],
-    phase: 'waiting'
+    deck: [],
+    community: [],
+    pot: 0,
+    turnIndex: 0,
+    phase: 'preflop', // preflop, flop, turn, river
+    maxBuyin: 500,
+    sb: 10
 };
 
-io.on('connection', (socket) => {
-    // שליחת מצב שולחן עדכני ברגע החיבור
-    socket.emit('update_table', gameData);
+function createDeck() {
+    const suits = ['h', 'd', 's', 'c'];
+    const values = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+    let deck = [];
+    for(let s of suits) for(let v of values) deck.push(v + s);
+    return deck.sort(() => Math.random() - 0.5);
+}
 
-    socket.on('admin_config', (data) => {
-        gameData.maxBuyin = parseInt(data.max);
-        gameData.sb = parseInt(data.sb);
-        io.emit('update_table', gameData); // עדכון לכולם בזמן אמת
+io.on('connection', (socket) => {
+    socket.emit('sync', game);
+
+    socket.on('admin_init', (data) => {
+        game.maxBuyin = data.max;
+        game.sb = data.sb;
+        game.deck = createDeck();
+        game.community = game.deck.splice(0, 5);
+        io.emit('sync', game);
     });
 
-    socket.on('player_join', (data) => {
-        if (gameData.players.length < 6) {
-            const player = {
+    socket.on('join', (data) => {
+        if (game.players.length < 6) {
+            const pCards = [game.deck.pop(), game.deck.pop()];
+            game.players.push({
                 id: socket.id,
                 name: data.name,
-                stack: parseInt(data.buyin) - gameData.sb,
-                bet: gameData.sb
-            };
-            gameData.players.push(player);
-            gameData.pot += gameData.sb;
-            io.emit('update_table', gameData);
+                stack: data.buyin - game.sb,
+                bet: game.sb,
+                cards: pCards
+            });
+            game.pot += game.sb;
+            io.emit('sync', game);
         }
     });
 
-    socket.on('deal_cards', (phase) => {
-        const deck = ['A♠', 'K♦', 'Q♣', 'J♥', '10♠']; // לוגיקה פשוטה לחלוקה
-        if (phase === 'flop') gameData.communityCards = deck.slice(0, 3);
-        gameData.phase = phase;
-        io.emit('update_table', gameData);
+    socket.on('action', (data) => {
+        // כאן נכנסת הלוגיקה של הימור/צ'ק/פולד
+        let p = game.players.find(pl => pl.id === socket.id);
+        if (data.type === 'call') {
+            p.stack -= data.amount;
+            p.bet += data.amount;
+            game.pot += data.amount;
+        }
+        // מעבר שלב אוטומטי
+        game.turnIndex = (game.turnIndex + 1) % game.players.length;
+        io.emit('sync', game);
+    });
+
+    socket.on('next_phase', () => {
+        const phases = ['preflop', 'flop', 'turn', 'river'];
+        game.phase = phases[phases.indexOf(game.phase) + 1] || 'preflop';
+        io.emit('sync', game);
     });
 
     socket.on('disconnect', () => {
-        gameData.players = gameData.players.filter(p => p.id !== socket.id);
-        io.emit('update_table', gameData);
+        game.players = game.players.filter(p => p.id !== socket.id);
+        io.emit('sync', game);
     });
 });
 
-http.listen(process.env.PORT || 3000, () => console.log('Server Active'));
+http.listen(process.env.PORT || 3000);
