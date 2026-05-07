@@ -2,69 +2,74 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pokerpais Ultimate</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pokerpais Fixed</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { background: #0f0f0f; color: white; font-family: sans-serif; margin: 0; overflow: hidden; }
-        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; }
+        body { background: #0f0f0f; color: white; font-family: sans-serif; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
+        
+        /* אזור ניהול עליון */
+        #admin-area { background: #222; padding: 5px; display: none; justify-content: center; gap: 5px; border-bottom: 1px solid #f1c40f; z-index: 10; }
+
+        #table-zone { flex-grow: 1; position: relative; display: flex; align-items: center; justify-content: center; }
         
         #poker-table {
-            width: 80%; height: 40%; background: radial-gradient(circle, #1a5d1a 0%, #0a3d0a 100%);
-            border: 12px solid #3d2b1f; border-radius: 200px; margin-top: 100px;
-            position: relative; box-shadow: inset 0 0 50px #000;
+            width: 90vw; height: 50vw; background: radial-gradient(circle, #1a5d1a 0%, #0a3d0a 100%);
+            border: 8px solid #3d2b1f; border-radius: 100px; position: relative; box-shadow: inset 0 0 30px #000;
         }
 
-        .player-slot {
-            position: absolute; width: 80px; text-align: center;
-            background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; border: 2px solid #555;
-        }
-
-        .community-cards { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 10px; }
+        .community-cards { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 5px; }
         
         .card {
-            width: 40px; height: 60px; background: white; color: black; border-radius: 5px;
+            width: 35px; height: 50px; background: white; color: black; border-radius: 4px;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            font-weight: bold; border: 1px solid #999; animation: deal 0.5s ease-out;
+            font-weight: bold; border: 1px solid #000; font-size: 14px;
         }
-
-        @keyframes deal { from { transform: translateY(-100px) rotate(20deg); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
         .red { color: #e74c3c; }
-        .controls { position: fixed; bottom: 20px; display: flex; gap: 10px; }
-        button { padding: 15px 25px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; }
-        .btn-main { background: #f1c40f; color: black; }
-        .btn-action { background: #3498db; color: white; }
+
+        .player-slot { position: absolute; width: 60px; text-align: center; font-size: 10px; background: rgba(0,0,0,0.6); padding: 5px; border-radius: 5px; }
+
+        /* אזור תחתון לקלפים וכפתורים */
+        #bottom-bar { background: #1a1a1a; padding: 10px; border-top: 2px solid #333; }
+        #my-hand { display: flex; justify-content: center; gap: 10px; margin-bottom: 10px; min-height: 55px; }
+        
+        .action-btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        
+        button { padding: 12px 5px; border-radius: 8px; border: none; font-weight: bold; font-size: 14px; color: white; }
+        .btn-admin { background: #f1c40f; color: black; padding: 8px 15px; font-size: 12px; }
+        .btn-bet { background: #2980b9; }
+        .btn-fold { background: #c0392b; }
+        .btn-check { background: #7f8c8d; }
     </style>
 </head>
 <body>
     <div id="setup" style="padding: 50px; text-align: center;">
         <h1>Pokerpais 🃏</h1>
         <input type="text" id="nick" placeholder="שם שחקן" style="padding: 10px;"><br><br>
-        <button class="btn-main" onclick="join()">היכנס לשולחן</button>
+        <button style="background:#f1c40f; color:black" onclick="join()">היכנס לשולחן</button>
     </div>
 
-    <div id="game-ui" style="display:none;">
-        <div id="game-container">
-            <div style="margin-top: 20px; font-size: 20px; color: #f1c40f;">קופה: <span id="pot">0</span></div>
-            
+    <div id="game-ui" style="display:none; height: 100%;">
+        <div id="admin-area">
+            <button class="btn-admin" onclick="socket.emit('startGame')">יד חדשה</button>
+            <button class="btn-admin" onclick="socket.emit('nextPhase')">פתח קלף</button>
+        </div>
+
+        <div style="text-align:center; color:#f1c40f; padding:5px;">💰 קופה: <span id="pot">0</span></div>
+
+        <div id="table-zone">
             <div id="poker-table">
                 <div class="community-cards" id="community"></div>
                 <div id="players-circle"></div>
             </div>
+        </div>
 
-            <div id="my-hand" style="margin-top: 40px;">
-                <div style="margin-bottom: 10px;">הקלפים שלך:</div>
-                <div id="cards-container" style="display: flex; gap: 10px;"></div>
-            </div>
-
-            <div class="controls">
-                <div id="admin-controls" style="display:none;">
-                    <button class="btn-main" onclick="socket.emit('startGame')">חלק קלפים</button>
-                    <button class="btn-main" onclick="socket.emit('nextPhase')">פתח שולחן</button>
-                </div>
-                <button class="btn-action" onclick="socket.emit('action', {type: 'bet', amount: 50})">המר 50</button>
-                <button class="btn-action" style="background: #c0392b;" onclick="socket.emit('action', {type: 'fold'})">Fold</button>
+        <div id="bottom-bar">
+            <div id="my-hand"></div>
+            <div class="action-btns">
+                <button class="btn-fold" onclick="socket.emit('action', {type: 'fold'})">Fold</button>
+                <button class="btn-check" onclick="socket.emit('action', {type: 'check'})">Check</button>
+                <button class="btn-bet" onclick="socket.emit('action', {type: 'bet', amount: 50})">המר 50</button>
             </div>
         </div>
     </div>
@@ -76,7 +81,7 @@
             if(n) {
                 socket.emit('joinGame', n);
                 document.getElementById('setup').style.display = 'none';
-                document.getElementById('game-ui').style.display = 'block';
+                document.getElementById('game-ui').style.display = 'flex';
             }
         }
 
@@ -87,16 +92,37 @@
 
         socket.on('updatePlayers', (players) => {
             const me = players.find(p => p.id === socket.id);
-            if(me && me.isAdmin) document.getElementById('admin-controls').style.display = 'block';
+            if(me && me.isAdmin) document.getElementById('admin-area').style.display = 'flex';
             renderPlayers(players);
         });
 
         socket.on('gameUpdate', (data) => {
             document.getElementById('pot').innerText = data.gameState.pot;
             document.getElementById('community').innerHTML = data.gameState.communityCards.map(createCardHTML).join('');
-            
             const me = data.players.find(p => p.id === socket.id);
             if(me && me.cards.length) {
+                document.getElementById('my-hand').innerHTML = me.cards.map(createCardHTML).join('');
+            }
+            renderPlayers(data.players);
+        });
+
+        function renderPlayers(players) {
+            const container = document.getElementById('players-circle');
+            container.innerHTML = '';
+            players.forEach((p, i) => {
+                const angle = (i / players.length) * 2 * Math.PI;
+                const x = Math.cos(angle) * 40 + 50;
+                const y = Math.sin(angle) * 40 + 50;
+                container.innerHTML += `
+                    <div class="player-slot" style="left: ${x}%; top: ${y}%; transform: translate(-50%, -50%);">
+                        <div>${p.username}</div>
+                        <div style="color: #f1c40f;">$${p.chips}</div>
+                    </div>`;
+            });
+        }
+    </script>
+</body>
+</html>
                 document.getElementById('cards-container').innerHTML = me.cards.map(createCardHTML).join('');
             }
             renderPlayers(data.players);
