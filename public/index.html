@@ -2,25 +2,77 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>Poker Management</title>
+    <title>Professional Poker</title>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .setup-box { background: #1a1a1a; padding: 30px; border-radius: 15px; border: 2px solid #f1c40f; text-align: center; }
-        input { display: block; width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; }
-        button { background: #f1c40f; color: #000; padding: 15px 30px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        body { background: #000; color: #fff; font-family: sans-serif; margin: 0; overflow: hidden; }
+        .table-area { height: 70vh; display: flex; align-items: center; justify-content: center; position: relative; }
+        .poker-felt { width: 80%; height: 70%; background: #1a5d1a; border: 12px solid #3d2b1f; border-radius: 500px; position: relative; box-shadow: inset 0 0 50px #000; }
+        
+        /* השחקן - הכסף בראש */
+        .player-box { position: absolute; transform: translate(-50%, -50%); text-align: center; width: 100px; }
+        .player-info { background: #222; border: 2px solid #555; border-radius: 10px; padding: 5px; }
+        .bank { color: #2ecc71; font-weight: bold; }
+        
+        /* הצ'יפים על השולחן */
+        .chip { width: 30px; height: 30px; background: radial-gradient(circle, #f1c40f, #d4ac0d); border: 2px dashed #fff; border-radius: 50%; margin: 5px auto; color: #000; font-weight: bold; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+        
+        #admin-controls { background: #333; padding: 15px; display: flex; gap: 10px; justify-content: center; }
+        .card { width: 40px; height: 60px; background: white; color: black; border-radius: 5px; display: inline-block; margin: 2px; text-align: center; line-height: 60px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div class="setup-box">
-        <h2 style="color: #f1c40f;">ניהול שולחן פוקר</h2>
-        <p>קבע את חוקי המשחק:</p>
-        
-        <input type="number" id="maxBuyin" placeholder="מקסימום כניסה (למשל 500)">
-        <input type="number" id="smallBlind" placeholder="Small Blind (למשל 5)">
-        
-        <button onclick="alert('החוקים ננעלו! עכשיו אפשר לשלוח קישור לשחקנים')">פתח שולחן</button>
+    <div id="admin-controls">
+        <input type="number" id="m-in" placeholder="מקסימום כניסה" value="500">
+        <input type="number" id="s-in" placeholder="Small Blind" value="5">
+        <button onclick="startGame()" style="background:#27ae60; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer;">חלק קלפים</button>
     </div>
 
+    <div class="table-area">
+        <div class="poker-felt">
+            <div id="pot-display" style="position:absolute; top:30%; left:50%; transform:translateX(-50%); font-size:20px; color:#f1c40f;">קופה: 0</div>
+            <div id="community-cards" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);"></div>
+            <div id="players-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // המערכת המקצועית - סנכרון בליינדים וצ'יפים
+        let players = [
+            { name: "בוגי", bank: 500, bet: 0, x: 50, y: 90 },
+            { name: "מומי", bank: 500, bet: 0, x: 50, y: 10 }
+        ];
+
+        function render() {
+            const container = document.getElementById('players-container');
+            container.innerHTML = '';
+            players.forEach(p => {
+                container.innerHTML += `
+                    <div class="player-box" style="left:${p.x}%; top:${p.y}%;">
+                        <div class="player-info">
+                            <div>${p.name}</div>
+                            <div class="bank">$${p.bank}</div> </div>
+                        ${p.bet > 0 ? `<div class="chip">${p.bet}</div>` : ''} </div>`;
+            });
+        }
+
+        function startGame() {
+            const sb = parseInt(document.getElementById('s-in').value);
+            const bb = sb * 2;
+            
+            // גבייה אוטומטית מהבנק לצ'יפים על השולחן
+            players[0].bank -= sb; players[0].bet = sb;
+            players[1].bank -= bb; players[1].bet = bb;
+            
+            document.getElementById('pot-display').innerText = `קופה: ${sb + bb}`;
+            
+            // פתיחת קלפים ויזואלית
+            const comm = document.getElementById('community-cards');
+            comm.innerHTML = '<div class="card">A♠</div><div class="card">K♦</div><div class="card">Q♥</div>';
+            
+            render();
+        }
+        render();
+    </script>
 </body>
 </html>
